@@ -1,1 +1,99 @@
-<h1>Halo Guru! Ini Dashboard Anda.</h1>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Guru</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        h1 { color: #d32f2f; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .loading { color: gray; font-style: italic; }
+        .btn-logout { background: #333; color: white; border: none; padding: 10px; cursor: pointer; float: right; }
+    </style>
+</head>
+<body>
+
+    <button onclick="logout()" class="btn-logout">Keluar</button>
+    <h1>Halo Guru! Ini Daftar Siswa Anda.</h1>
+    <p>Data diambil langsung dari Database:</p>
+
+    <div id="tabel-container">
+        <p class="loading">Sedang mengambil data siswa...</p>
+    </div>
+
+    <script type="module">
+        // 1. Ambil sambungan database dari file config
+        import { db, auth } from './js/firebase-config.js';
+        import { collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        // 2. Cek apakah Guru sudah login?
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                console.log("Guru login:", user.email);
+                ambilDataSiswa(); // Kalau login aman, ambil data!
+            } else {
+                window.location.href = "index.html"; // Kalau belum, tendang ke depan
+            }
+        });
+
+        // 3. Fungsi Ambil Data Siswa dari Database
+        async function ambilDataSiswa() {
+            const container = document.getElementById("tabel-container");
+            
+            try {
+                // Cari user yang role-nya 'siswa'
+                const q = query(collection(db, "users"), where("role", "==", "siswa"));
+                const querySnapshot = await getDocs(q);
+
+                if (querySnapshot.empty) {
+                    container.innerHTML = "<p>Belum ada siswa.</p>";
+                    return;
+                }
+
+                // Susun Tabel
+                let html = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Nama Siswa</th>
+                                <th>Kelas</th>
+                                <th>Email</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                // Masukkan data satu per satu ke baris tabel
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    html += `
+                        <tr>
+                            <td>${data.nama}</td>
+                            <td>${data.kelas || '-'}</td>
+                            <td>${data.email}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `</tbody></table>`;
+                container.innerHTML = html;
+
+            } catch (error) {
+                console.error("Error ambil data:", error);
+                container.innerHTML = "<p style='color:red'>Gagal mengambil data. Cek Console.</p>";
+            }
+        }
+
+        // Fungsi Logout
+        window.logout = function() {
+            signOut(auth).then(() => {
+                window.location.href = "index.html";
+            });
+        }
+    </script>
+</body>
+</html>
