@@ -1,1 +1,84 @@
-<h1>Halo Siswa! Ini Dashboard Anda.</h1>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Siswa</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; text-align: center; background-color: #f4f4f9; }
+        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h1 { color: #2e7d32; margin-bottom: 5px; }
+        h2 { color: #333; margin-top: 0; }
+        .info { background: #e8f5e9; padding: 10px; border-radius: 8px; display: inline-block; margin: 10px 0; }
+        
+        .btn-absen { 
+            background-color: #2e7d32; color: white; 
+            padding: 15px 40px; border: none; border-radius: 50px; 
+            font-size: 20px; font-weight: bold; cursor: pointer; 
+            margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+        }
+        .btn-absen:active { transform: scale(0.95); }
+        
+        .btn-logout { background: #555; color: white; border: none; padding: 8px 15px; cursor: pointer; margin-top: 30px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h1>👋 Halo, Siswa!</h1>
+        
+        <h2 id="nama-siswa">Sedang memuat...</h2>
+        
+        <div class="info">
+            Kelas: <strong id="kelas-siswa">-</strong>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+
+        <p>Sudah sampai sekolah? Klik tombol ini:</p>
+        
+        <button class="btn-absen" onclick="absenSekarang()">
+            📍 ABSEN MASUK
+        </button>
+        
+        <br>
+        <button onclick="logout()" class="btn-logout">Keluar</button>
+    </div>
+
+    <script type="module">
+        import { db, auth } from './js/firebase-config.js';
+        import { doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+        // 1. Cek Login & Ambil Nama Siswa
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                // Ambil data profil dari database berdasarkan UID
+                const docRef = doc(db, "users", user.uid);
+                const docSnap = await getDoc(docRef);
+                
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    document.getElementById("nama-siswa").innerText = data.nama; // Ubah teks jadi nama asli
+                    document.getElementById("kelas-siswa").innerText = data.kelas;
+                }
+            } else {
+                window.location.href = "index.html"; // Kalau belum login, tendang keluar
+            }
+        });
+
+        // 2. Fungsi Tombol Absen (Sementara Alert Dulu)
+        window.absenSekarang = function() {
+            alert("Tombol berfungsi! Nanti kita sambungkan ke GPS & Kamera.");
+        }
+
+        // 3. Fungsi Logout
+        window.logout = function() {
+            signOut(auth).then(() => {
+                window.location.href = "index.html";
+            });
+        }
+    </script>
+</body>
+</html>
