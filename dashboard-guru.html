@@ -3,78 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Guru</title>
+    <title>Dashboard Guru - Monitoring Absensi</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
-        h1 { color: #d32f2f; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        .loading { color: gray; font-style: italic; }
-        .btn-logout { background: #333; color: white; border: none; padding: 10px; cursor: pointer; float: right; }
+        body { font-family: sans-serif; padding: 20px; max-width: 900px; margin: 0 auto; background-color: #f5f5f5; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        h1 { color: #d32f2f; margin: 0; }
+        
+        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border-bottom: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f8f9fa; color: #444; }
+        tr:hover { background-color: #f1f1f1; }
+        
+        .badge { padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; }
+        .hadir { background: #e8f5e9; color: #2e7d32; }
+        .telat { background: #ffebee; color: #c62828; }
+
+        .btn-refresh { background: #1976d2; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        .btn-logout { background: #555; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-    <button onclick="logout()" class="btn-logout">Keluar</button>
-    <h1>Halo Guru! Ini Daftar Siswa Anda.</h1>
-    <p>Data diambil langsung dari Database:</p>
+    <div class="header">
+        <h1>📊 Data Kehadiran Hari Ini</h1>
+        <div>
+            <button onclick="location.reload()" class="btn-refresh">🔄 Refresh Data</button>
+            <button onclick="logout()" class="btn-logout">Keluar</button>
+        </div>
+    </div>
 
-    <div id="tabel-container">
-        <p class="loading">Sedang mengambil data siswa...</p>
+    <div class="card">
+        <h3>Laporan Masuk Real-Time</h3>
+        <div id="tabel-container">
+            <p>Sedang memuat data...</p>
+        </div>
     </div>
 
     <script type="module">
-        // 1. Ambil sambungan database dari file config
         import { db, auth } from './js/firebase-config.js';
-        import { collection, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { collection, getDocs, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-        // 2. Cek apakah Guru sudah login?
+        // 1. Cek Login Guru
         onAuthStateChanged(auth, (user) => {
             if (user) {
-                console.log("Guru login:", user.email);
-                ambilDataSiswa(); // Kalau login aman, ambil data!
+                ambilDataAbsensi();
             } else {
-                window.location.href = "index.html"; // Kalau belum, tendang ke depan
+                window.location.href = "index.html";
             }
         });
 
-        // 3. Fungsi Ambil Data Siswa dari Database
-        async function ambilDataSiswa() {
+        // 2. Ambil Data Absensi dari Koleksi 'absensi'
+        async function ambilDataAbsensi() {
             const container = document.getElementById("tabel-container");
             
             try {
-                // Cari user yang role-nya 'siswa'
-                const q = query(collection(db, "users"), where("role", "==", "siswa"));
+                // Ambil data diurutkan dari yang paling baru (descending)
+                const q = query(collection(db, "absensi"), orderBy("tanggal", "desc"), limit(50));
                 const querySnapshot = await getDocs(q);
 
                 if (querySnapshot.empty) {
-                    container.innerHTML = "<p>Belum ada siswa.</p>";
+                    container.innerHTML = "<p>Belum ada data absensi hari ini.</p>";
                     return;
                 }
 
-                // Susun Tabel
                 let html = `
                     <table>
                         <thead>
                             <tr>
+                                <th>Waktu</th>
                                 <th>Nama Siswa</th>
                                 <th>Kelas</th>
-                                <th>Email</th>
+                                <th>Jarak</th>
+                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
                 `;
 
-                // Masukkan data satu per satu ke baris tabel
                 querySnapshot.forEach((doc) => {
                     const data = doc.data();
+                    
+                    // Format Tanggal & Jam
+                    const dateObj = data.tanggal.toDate();
+                    const jam = dateObj.toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' });
+                    const tgl = dateObj.toLocaleDateString("id-ID");
+
                     html += `
                         <tr>
+                            <td><strong>${jam}</strong> <br> <small style="color:gray">${tgl}</small></td>
                             <td>${data.nama}</td>
-                            <td>${data.kelas || '-'}</td>
-                            <td>${data.email}</td>
+                            <td>${data.kelas}</td>
+                            <td>${data.jarak_meter} m</td>
+                            <td><span class="badge hadir">${data.status}</span></td>
                         </tr>
                     `;
                 });
@@ -83,16 +106,13 @@
                 container.innerHTML = html;
 
             } catch (error) {
-                console.error("Error ambil data:", error);
-                container.innerHTML = "<p style='color:red'>Gagal mengambil data. Cek Console.</p>";
+                console.error("Error:", error);
+                container.innerHTML = "<p style='color:red'>Gagal memuat data. Cek Console.</p>";
             }
         }
 
-        // Fungsi Logout
         window.logout = function() {
-            signOut(auth).then(() => {
-                window.location.href = "index.html";
-            });
+            signOut(auth).then(() => { window.location.href = "index.html"; });
         }
     </script>
 </body>
