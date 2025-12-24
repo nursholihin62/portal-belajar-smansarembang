@@ -20,3 +20,4 @@ const db = getFirestore(app);  // Mengaktifkan fitur Database
 
 // 4. EXPORT (Agar bisa dipakai file lain)
 export { auth, db };
+
