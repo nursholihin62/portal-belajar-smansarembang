@@ -3,177 +3,199 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Siswa</title>
+    <title>Absensi Siswa</title>
     <style>
         body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; text-align: center; background-color: #f4f4f9; }
         .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        h1 { color: #2e7d32; margin-bottom: 5px; }
-        h2 { color: #333; margin-top: 0; }
-        .info { background: #e8f5e9; padding: 10px; border-radius: 8px; display: inline-block; margin: 10px 0; }
+        h1 { color: #1a237e; margin-bottom: 5px; }
         
-        .btn-absen { 
-            background-color: #2e7d32; color: white; 
-            padding: 15px 40px; border: none; border-radius: 50px; 
-            font-size: 20px; font-weight: bold; cursor: pointer; 
-            margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            transition: transform 0.1s;
-        }
-        .btn-absen:active { transform: scale(0.95); }
-        .btn-absen:disabled { background-color: #ccc; cursor: not-allowed; }
+        /* Tombol Pilihan Status */
+        .btn-group { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+        .btn-pilih { flex: 1; padding: 10px; border: 1px solid #ddd; background: #fff; cursor: pointer; border-radius: 8px; font-weight: bold; transition: 0.3s; }
+        .btn-pilih.active { background: #1a237e; color: white; border-color: #1a237e; }
+        
+        /* Area Konten Berubah-ubah */
+        .konten-absen { display: none; margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 10px; }
+        .konten-absen.active { display: block; animation: fadeIn 0.5s; }
+        
+        /* Tombol Aksi */
+        .btn-aksi { width: 100%; padding: 12px; border: none; border-radius: 50px; font-size: 16px; font-weight: bold; cursor: pointer; color: white; margin-top: 10px; }
+        .btn-hijau { background: #2e7d32; }
+        .btn-biru { background: #1976d2; }
+        .btn-orange { background: #f57c00; }
+        .btn-disabled { background: #ccc; cursor: not-allowed; }
 
-        .btn-logout { background: #555; color: white; border: none; padding: 8px 15px; cursor: pointer; margin-top: 30px; border-radius: 5px; }
+        input[type="file"] { margin: 10px 0; width: 100%; }
         
-        #status-lokasi { margin-top: 15px; font-size: 14px; color: #666; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h1>👋 Halo, Siswa!</h1>
+        <h1>👋 Halo, <span id="nama-siswa">...</span></h1>
+        <p>Kelas: <strong id="kelas-siswa">-</strong></p>
+        <hr>
+
+        <p>Silakan pilih status kehadiran hari ini:</p>
         
-        <h2 id="nama-siswa">Sedang memuat...</h2>
-        
-        <div class="info">
-            Kelas: <strong id="kelas-siswa">-</strong>
+        <div class="btn-group">
+            <button class="btn-pilih active" onclick="gantiTab('hadir', event)">Hadir</button>
+            <button class="btn-pilih" onclick="gantiTab('sakit', event)">Sakit</button>
+            <button class="btn-pilih" onclick="gantiTab('izin', event)">Izin</button>
         </div>
 
-        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+        <div id="tab-hadir" class="konten-absen active">
+            <p>Pastikan Anda berada di sekolah.</p>
+            <p id="status-lokasi" style="font-size:12px; color:gray"></p>
+            <button id="btn-gps" class="btn-aksi btn-hijau" onclick="absenHadir()">📍 CEK LOKASI & ABSEN</button>
+        </div>
 
-        <p>Sudah sampai sekolah? Klik tombol ini:</p>
-        
-        <button id="btn-absen" class="btn-absen" onclick="absenSekarang()">
-            📍 ABSEN MASUK
-        </button>
-        
-        <p id="status-lokasi"></p>
-        
+        <div id="tab-sakit" class="konten-absen">
+            <p>Upload foto Surat Dokter / Surat Sakit:</p>
+            <input type="file" id="file-sakit" accept="image/*">
+            <button id="btn-sakit" class="btn-aksi btn-orange" onclick="kirimIzin('Sakit')">📤 KIRIM SURAT SAKIT</button>
+        </div>
+
+        <div id="tab-izin" class="konten-absen">
+            <p>Upload foto Surat Izin Orang Tua:</p>
+            <input type="file" id="file-izin" accept="image/*">
+            <button id="btn-izin" class="btn-aksi btn-biru" onclick="kirimIzin('Izin')">📤 KIRIM SURAT IZIN</button>
+        </div>
+
         <br>
-        <button onclick="logout()" class="btn-logout">Keluar</button>
+        <button onclick="logout()" style="border:none; background:none; text-decoration:underline; cursor:pointer; color: red;">Keluar</button>
     </div>
 
     <script type="module">
         import { db, auth } from './js/firebase-config.js';
         import { doc, getDoc, collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
         import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        // Import Storage (Gudang File)
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
-        // --- KONFIGURASI LOKASI SEKOLAH (REMBANG) ---
-        const SEKOLAH_LAT = -6.699783;
+        const storage = getStorage(); // Inisialisasi Storage
+        
+        // --- KONFIGURASI KOORDINAT SEKOLAH ---
+        const SEKOLAH_LAT = -6.699783; 
         const SEKOLAH_LNG = 111.319910;
-        const RADIUS_METER = 100; // Toleransi jarak 100 meter
+        const RADIUS_METER = 100; 
 
-        let currentUserProfile = null; // Simpan data siswa sementara
+        let userProfile = null;
 
-        // 1. Cek Login & Ambil Data Profil
+        // CEK LOGIN
         onAuthStateChanged(auth, async (user) => {
             if (user) {
-                const docRef = doc(db, "users", user.uid);
-                const docSnap = await getDoc(docRef);
-                
-                if (docSnap.exists()) {
-                    currentUserProfile = docSnap.data(); // Simpan data ke variabel global
-                    document.getElementById("nama-siswa").innerText = currentUserProfile.nama;
-                    document.getElementById("kelas-siswa").innerText = currentUserProfile.kelas;
+                const snap = await getDoc(doc(db, "users", user.uid));
+                if (snap.exists()) {
+                    userProfile = snap.data();
+                    document.getElementById("nama-siswa").innerText = userProfile.nama;
+                    document.getElementById("kelas-siswa").innerText = userProfile.kelas;
                 }
             } else {
                 window.location.href = "index.html";
             }
         });
 
-        // 2. Fungsi Utama: ABSEN SEKARANG
-        window.absenSekarang = function() {
-            const btn = document.getElementById("btn-absen");
-            const statusTxt = document.getElementById("status-lokasi");
-
-            if (!navigator.geolocation) {
-                alert("Browser Anda tidak mendukung GPS.");
-                return;
-            }
-
-            btn.disabled = true;
-            btn.innerText = "Mencari Lokasi...";
-            statusTxt.innerText = "Sedang mendeteksi posisi Anda...";
-
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    // Sukses dapat lokasi
-                    const userLat = position.coords.latitude;
-                    const userLng = position.coords.longitude;
-                    
-                    // Hitung Jarak
-                    const jarak = hitungJarak(userLat, userLng, SEKOLAH_LAT, SEKOLAH_LNG);
-                    const jarakBulat = Math.round(jarak);
-
-                    if (jarak <= RADIUS_METER) {
-                        // POSISI AMAN -> SIMPAN KE DATABASE
-                        simpanAbsensi(userLat, userLng, jarakBulat);
-                    } else {
-                        // POSISI JAUH
-                        alert(`❌ GAGAL ABSEN!\n\nAnda berada ${jarakBulat} meter dari sekolah.\nRadius maks: ${RADIUS_METER} meter.\nSilakan masuk ke area sekolah.`);
-                        btn.disabled = false;
-                        btn.innerText = "📍 ABSEN MASUK";
-                        statusTxt.innerText = `Posisi Anda: ${jarakBulat}m dari titik pusat.`;
-                    }
-                },
-                (error) => {
-                    // Gagal dapat lokasi
-                    console.error(error);
-                    alert("Gagal mendeteksi lokasi. Pastikan GPS aktif dan Izinkan akses lokasi.");
-                    btn.disabled = false;
-                    btn.innerText = "📍 ABSEN MASUK";
-                },
-                { enableHighAccuracy: true } // Minta akurasi tinggi (Penting buat HP)
-            );
+        // FUNGSI GANTI TAB (Klik Hadir/Sakit/Izin)
+        window.gantiTab = function(tipe, event) {
+            // Reset semua tombol dan konten
+            document.querySelectorAll('.btn-pilih').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.konten-absen').forEach(d => d.classList.remove('active'));
+            
+            // Aktifkan yang dipilih
+            event.target.classList.add('active');
+            document.getElementById('tab-' + tipe).classList.add('active');
         }
 
-        // 3. Fungsi Simpan ke Firestore
-        async function simpanAbsensi(lat, lng, jarak) {
-            const btn = document.getElementById("btn-absen");
+        // --- 1. LOGIKA ABSEN HADIR (GPS) ---
+        window.absenHadir = function() {
+            const btn = document.getElementById("btn-gps");
             const statusTxt = document.getElementById("status-lokasi");
+
+            if (!navigator.geolocation) { alert("GPS tidak didukung"); return; }
+            
+            btn.disabled = true; btn.innerText = "Mendeteksi...";
+            
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                const jarak = hitungJarak(lat, lng, SEKOLAH_LAT, SEKOLAH_LNG);
+                
+                if (jarak <= RADIUS_METER) {
+                    await simpanData("Hadir", { lat: lat, lng: lng, jarak: Math.round(jarak) }, null);
+                    alert("✅ Berhasil Absen Hadir!");
+                    btn.innerText = "Sudah Absen";
+                } else {
+                    alert(`❌ Terlalu Jauh! Jarak: ${Math.round(jarak)}m.`);
+                    btn.disabled = false; btn.innerText = "📍 CEK LOKASI LAGI";
+                }
+                statusTxt.innerText = `Jarak: ${Math.round(jarak)} meter`;
+            }, (err) => {
+                alert("Gagal ambil lokasi. Pastikan GPS nyala!");
+                btn.disabled = false; btn.innerText = "📍 CEK LOKASI";
+            }, { enableHighAccuracy: true });
+        }
+
+        // --- 2. LOGIKA UPLOAD SURAT (SAKIT/IZIN) ---
+        window.kirimIzin = async function(tipe) {
+            const inputId = tipe === 'Sakit' ? 'file-sakit' : 'file-izin';
+            const fileInput = document.getElementById(inputId);
+            const file = fileInput.files[0];
+            const btn = document.getElementById(tipe === 'Sakit' ? 'btn-sakit' : 'btn-izin');
+
+            if (!file) { alert("⚠️ Wajib upload foto surat!"); return; }
+
+            btn.disabled = true; btn.innerText = "Sedang Mengupload...";
 
             try {
-                // Simpan ke koleksi baru bernama 'absensi'
-                await addDoc(collection(db, "absensi"), {
-                    uid: auth.currentUser.uid,
-                    nama: currentUserProfile.nama,
-                    kelas: currentUserProfile.kelas,
-                    tanggal: serverTimestamp(), // Jam server (anti curang)
-                    lokasi: { lat: lat, lng: lng },
-                    jarak_meter: jarak,
-                    status: "Hadir"
-                });
+                // A. Upload foto ke Firebase Storage
+                // Nama file unik: uid_jam_namafile
+                const namaFile = `surat/${auth.currentUser.uid}_${Date.now()}.jpg`;
+                const storageRef = ref(storage, namaFile);
+                
+                // Proses Upload
+                const snapshot = await uploadBytes(storageRef, file);
+                
+                // Ambil Link Download (URL) foto yang sudah diupload
+                const urlFoto = await getDownloadURL(snapshot.ref);
 
-                alert("✅ BERHASIL ABSEN!\nData kehadiran Anda telah tercatat.");
-                btn.innerText = "Sudah Absen";
-                statusTxt.innerText = `Tercatat pada jarak ${jarak}m.`;
-                statusTxt.style.color = "green";
-
+                // B. Simpan data ke Database (Firestore) dengan Link Foto
+                await simpanData(tipe, null, urlFoto);
+                
+                alert(`✅ Surat ${tipe} Berhasil Dikirim!`);
+                btn.innerText = "Terkirim";
+                fileInput.value = ""; // Reset input file
             } catch (error) {
-                console.error("Error simpan:", error);
-                alert("Terjadi kesalahan saat menyimpan data.");
-                btn.disabled = false;
-                btn.innerText = "📍 ABSEN MASUK";
+                console.error("Error upload:", error);
+                alert("Gagal mengirim data: " + error.message);
+                btn.disabled = false; btn.innerText = "Coba Lagi";
             }
         }
 
-        // 4. Rumus Matematika Menghitung Jarak (Haversine Formula)
+        // FUNGSI UMUM SIMPAN KE DATABASE
+        async function simpanData(status, lokasiData, buktiUrl) {
+            await addDoc(collection(db, "absensi"), {
+                uid: auth.currentUser.uid,
+                nama: userProfile.nama,
+                kelas: userProfile.kelas,
+                tanggal: serverTimestamp(),
+                status: status,     // "Hadir", "Sakit", atau "Izin"
+                lokasi: lokasiData, // Ada isinya kalau Hadir, null kalau Sakit/Izin
+                bukti_foto: buktiUrl // URL foto dari Storage (untuk Sakit/Izin)
+            });
+        }
+
+        // Rumus Hitung Jarak
         function hitungJarak(lat1, lon1, lat2, lon2) {
-            const R = 6371e3; // Jari-jari bumi (meter)
-            const phi1 = lat1 * Math.PI / 180;
-            const phi2 = lat2 * Math.PI / 180;
-            const deltaPhi = (lat2 - lat1) * Math.PI / 180;
-            const deltaLambda = (lon2 - lon1) * Math.PI / 180;
-
-            const a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
-                      Math.cos(phi1) * Math.cos(phi2) *
-                      Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-            return R * c; // Hasil dalam meter
+            const R = 6371e3; 
+            const dLat = (lat2-lat1) * Math.PI/180;
+            const dLon = (lon2-lon1) * Math.PI/180;
+            const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)*Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        window.logout = function() {
-            signOut(auth).then(() => { window.location.href = "index.html"; });
-        }
+        window.logout = function() { signOut(auth).then(() => window.location.href = "index.html"); }
     </script>
 </body>
 </html>
